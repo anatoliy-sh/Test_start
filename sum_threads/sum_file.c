@@ -160,7 +160,7 @@ void* work(void* p){
 		for(int i = 0; i<50; i++){
 			if( isdigit(params->str[i]) != 0){
 				sum+=atoi(&params->str[i]);
-				printf("%c ",params->str[i]);
+				//printf("%c ",params->str[i]);
 			}
 			//printf("%s ",&params->str[i]);
 		}
@@ -169,7 +169,7 @@ void* work(void* p){
 		
 		pthread_mutex_lock(&params->paramsWriter->mutex);
 		//printf("я поток %d залочил \n",params->num);
-		putQueueArray(&params->paramsWriter->queue, sum);
+		putQueueArray(&params->paramsWriter->queue, &sum);
 		
 		pthread_mutex_unlock(&params->paramsWriter->mutex);
 		//printf("я поток %d отпустил \n",params->num);
@@ -189,8 +189,10 @@ void* sumAndWrite(void* p){
 	pthread_cond_wait(&params->condvar,&params->mutex);
 	while(isEmptyQueueArray(&params->queue) == 0){
 	getQueueArray(&params->queue, &b);
-	printf("%d\n", b);
-	sum+=b;
+	
+  int* k = (int *) b;
+  printf("%d\n", *k);
+	sum += *k;
 	}	
 	pthread_mutex_unlock(&params->mutex);
 	FILE *mf;
@@ -222,7 +224,7 @@ void* readAndSend(void* p){
        if (estr != NULL){       
       	
       	params->structArr[count].str = str[count];
-      	sleep(1);
+      	//sleep(1);
       	pthread_cond_signal(&params->structArr[count].condvar);
       	
       }

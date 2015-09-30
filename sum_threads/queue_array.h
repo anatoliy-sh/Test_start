@@ -18,7 +18,7 @@ const int emptyQueueArray = 2;                              // Очередь п
 extern int errorQueueArray;
  
 /*Базовый тип очереди*/
-typedef int queueArrayBaseType;
+typedef void* queueArrayBaseType;
  
 /*Дескриптор очереди*/
 typedef struct {
