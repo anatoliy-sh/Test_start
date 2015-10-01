@@ -142,51 +142,52 @@ int main(){
 void* work(void* p){
 	
 	struct ParamsWorkers* params = (struct ParamsWorkers*) p;
-	int flag = 0;
+  pthread_mutex_lock(&params->paramsReader->mutex);
+  pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
+  pthread_mutex_unlock(&params->paramsReader->mutex);
+  int sum[50];
+  int count = -1;
 	while(1){
-    //sleep(1);
-		//printf("я поток %d->  \n",params->num);
-    //if(isEmptyQueueArray(&params->paramsReader->queue) == 0){
+
+
+    if(isEmptyQueueArray(&params->paramsReader->queue) == 0){
+    count++;
     void* typeQR;
     //printf("привет \n");
 		pthread_mutex_lock(&params->paramsReader->mutex);
-    //if (flag == 0){
-    pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
-    //flag = 1;
-    //}
+
+    //pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
 
     getQueueArray(&params->paramsReader->queue, &typeQR);
 
     char* str = (char *) typeQR;
     //printf("я работаю %s\n",str);
     pthread_mutex_unlock(&params->paramsReader->mutex);
-		int sum = 0;
+		sum[count] = 0;
 		for(int i = 0; i<50; i++){
 			if( isdigit(str[i]) != 0){
-				sum+=atoi(&str[i]);
+				sum[count]+=atoi(&str[i]);
 				//printf("%c ",params->str[i]);
 			}
 			//printf("%s ",&params->str[i]);
 		}
-    printf("сумма %d\n",sum);
-		//params->str = NULL;
-		//printf("я поток %d сумма %d -> %s\n",params->num,sum,params->str);
+    printf("сумма %d\n",sum[count]);
+
+
 		
 		pthread_mutex_lock(&params->paramsWriter->mutex);
 
-		putQueueArray(&params->paramsWriter->queue, &sum);
-		//printf("%d\n", params->paramsReader->count);
-    //printf("%d\n", countQueueArray(&params->paramsReader->queue));
+		putQueueArray(&params->paramsWriter->queue, &sum[count]);
+
+
     if(countQueueArray(&params->paramsWriter->queue) == params->paramsReader->count){
       pthread_cond_signal(&params->paramsWriter->condvar); 
       
     }
 		pthread_mutex_unlock(&params->paramsWriter->mutex);
-    //printf("%d\n", isEmptyQueueArray(&params->paramsReader->queue));
 
-		//pthread_mutex_unlock(&params->mutex);
-		//}
 		}
+  }
 		
 }
 
@@ -241,7 +242,7 @@ void* readAndSend(void* p){
   for(int i=0;i<WORKING_THREADS_COUNT;i++)
     pthread_cond_signal(&params->condvar);
   pthread_mutex_unlock(&params->mutex);
-  sleep(7);
+  sleep(1);
   /*while (isEmptyQueueArray(&params->queue) == 0){
     queueArrayBaseType typeQR;
     getQueueArray(&params->queue, &typeQR);
