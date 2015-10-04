@@ -6,6 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <sys/sem.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+//#define SIZEOFMEM = 30;
 
 void exit (int code);
 
@@ -16,12 +21,20 @@ void swap (int *x, int *y){
 }
 
 
-//int n, a[n]; //n - количество элементов
-void qs(int* s_arr, int first, int last)
+void qs(int* s_arr, int first, int last, int semID)
 {
-    int i = first, j = last, x = s_arr[(first + last) / 2];
 
-    do {
+
+      struct sembuf operations[1]; 
+      operations[0].sem_num = 0;   
+      operations[0].sem_op = -1;  
+
+
+      semop(semID, operations, sizeof(operations) / sizeof(struct sembuf)); 
+     
+      int i = first, j = last, x = s_arr[(first + last) / 2];
+
+      do {
         while (s_arr[i] < x) i++;
         while (s_arr[j] > x) j--;
 
@@ -30,74 +43,127 @@ void qs(int* s_arr, int first, int last)
             i++;
             j--;
         }
-    } while (i <= j);
+      } while (i <= j);
 
-    if (i < last)
-        qs(s_arr, i, last);
-    if (first < j)
-        qs(s_arr, first, j);
+      operations[0].sem_op = 1;
+      semop(semID, operations, sizeof(operations) / sizeof(struct sembuf)); 
+
+    
+
+    int fd[2];
+    pipe(fd);
+    if(!fork()){
+      close(fd[0]);
+      if (i < last){
+        qs(s_arr, i, last,semID);
+      }
+    }else{
+
+
+      if (first < j){
+        qs(s_arr, first, j,semID);
+      }
+    }
 }
 
 int main()
 {
   int fd[2];
   pipe(fd);
-  int memsize = 15;
+  int memsize = 30;
   int sizeOfShm = sizeof(int)*memsize;
   int shmid = shmget(IPC_PRIVATE, sizeOfShm, SHM_W | SHM_R | IPC_CREAT);
   if(shmid<0){
     perror("Impossible to access shared memory");
     exit(EXIT_FAILURE);
   }
+
   int* sharedMem = shmat(shmid, NULL, 0); //SHM_RDONLY
 
-  if(!fork()){
+  int semID = semget(IPC_PRIVATE, 1, IPC_CREAT | IPC_EXCL | 0600);
+  if(semID < 0) {
+    perror("semget fail:");
+    exit(EXIT_FAILURE);
+  }
+
+  if(semctl(semID, 0, SETVAL, 1) < 0){
+    perror("setval fail:");
+    exit(EXIT_FAILURE);
+  }
+ 
+  
+
+
+  int chpid = fork();
+
+  if(!chpid){
        
     close(fd[0]);
     int first = 0;
     int n = 15;
-    //int a[] = {14,13,12,11,10,9,8,7,6,5,4,3,2,1,0};
-    //sharedMem = a;
+
 
     for(int i = 0; i < memsize; ++i)
-      sharedMem[memsize-i-1] = i;
+      sharedMem[memsize-i-1] = rand() % 100;
 
     shmdt(&shmid);      
     write(fd[1], &first, sizeof(int));
 
     write(fd[1], &n, sizeof(int));
-
+    sleep(1);
+    for(int i = 0; i < memsize; ++i)
+        printf("%d ", sharedMem[i]);
+      printf("\n");
 
     }else{
+      
       close(fd[1]);
       int first;
       int last;
       int nbytes = read(fd[0], &first, sizeof(first));
-      printf("Received string: %d\n", first);
+      //printf("Received string: %d\n", first);
       nbytes = read(fd[0], &last, sizeof(last));
-      printf("Received string: %d\n", last);
+      //printf("Received string: %d\n", last);
       for(int i = 0; i < memsize; ++i)
         printf("%d ", sharedMem[i]);
       printf("\n");
       shmdt(&shmid);
       shmctl(shmid,IPC_RMID,NULL); //IPC_STAT IPC_SET
-      qs(sharedMem,first,last-1);
 
-      for(int i = 0; i < memsize; ++i)
-        printf("%d ", sharedMem[i]);
-      printf("\n");
+      //printf("%d\n", chpid);
+      qs(sharedMem,first,last-1,semID);
+      //пробная передача
+      /*pipe(fd);
+
+      if(!fork()){
+      close(fd[0]);
+      
+      int cfirst = 67;
+      int clast = 66;
+
+      write(fd[1], &cfirst, sizeof(int));
+
+      write(fd[1], &clast, sizeof(int));
+
+      }else{
+        int n1,n2;
+        int cnbytes = read(fd[0], &n1, sizeof(n1));
+        printf("Received string: %d\n", n1);
+        cnbytes = read(fd[0], &n2, sizeof(n2));
+        printf("Received string: %d\n", n2);
+      }*/
+
+
     }
-        //array = a;
-        /*qs(a,0,9);
+    //pid_t pid = getpid();
+    if(!chpid){
+    waitpid(chpid, NULL, 0); 
 
-
-        for(int i = 0; i<n; i++){
-        printf("%d \n",a[i]);
-        }*/
-
-
-
-
+    if(semctl(semID, 0, IPC_RMID) < 0) {
+      perror("remove fail:");
+      exit(EXIT_FAILURE);
+      }
+    }
 
         return 0;
 } 
