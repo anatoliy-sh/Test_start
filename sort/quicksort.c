@@ -100,7 +100,7 @@ int main()
        
     close(fd[0]);
     int first = 0;
-    int n = 15;
+    int n = 30;
 
 
     for(int i = 0; i < memsize; ++i)
@@ -109,11 +109,11 @@ int main()
     shmdt(&shmid);      
     write(fd[1], &first, sizeof(int));
 
-    write(fd[1], &n, sizeof(int));
-    sleep(1);
+    write(fd[1], &memsize, sizeof(int));
+    /*sleep(1);
     for(int i = 0; i < memsize; ++i)
         printf("%d ", sharedMem[i]);
-      printf("\n");
+      printf("\n");*/ 
 
     }else{
       
@@ -124,6 +124,7 @@ int main()
       //printf("Received string: %d\n", first);
       nbytes = read(fd[0], &last, sizeof(last));
       //printf("Received string: %d\n", last);
+      printf("\n");
       for(int i = 0; i < memsize; ++i)
         printf("%d ", sharedMem[i]);
       printf("\n");
@@ -158,7 +159,12 @@ int main()
     //pid_t pid = getpid();
     if(!chpid){
     waitpid(chpid, NULL, 0); 
-
+    sleep(1);
+    printf("\n");
+    printf("\n");
+    for(int i = 0; i < memsize; ++i)
+        printf("%d ", sharedMem[i]);
+      printf("\n");
     if(semctl(semID, 0, IPC_RMID) < 0) {
       perror("remove fail:");
       exit(EXIT_FAILURE);
