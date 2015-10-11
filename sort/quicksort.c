@@ -20,15 +20,14 @@ void swap (int *x, int *y){
      *y = z;
 }
 
-int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
+
 void hdl(int sig)
 {
-  printf("sigterm\n"); 
+  printf("\nEnd job\n"); 
+  exit(0);
 }
 void qs(int* s_arr, int first, int last, int semID)
 {
-
-
       struct sembuf operations[1]; 
       operations[0].sem_num = 0;   
       operations[0].sem_op = -1;  
@@ -63,7 +62,6 @@ void qs(int* s_arr, int first, int last, int semID)
         qs(s_arr, i, last,semID);
       }
       
-      //wait(NULL);
     }else{
 
 
@@ -76,6 +74,9 @@ void qs(int* s_arr, int first, int last, int semID)
 
 int main()
 {
+
+  signal(SIGINT, hdl);
+
   int fd[2];
   pipe(fd);
   int memsize = 30;
@@ -99,7 +100,6 @@ int main()
     exit(EXIT_FAILURE);
   }
  
-  printf("First - %d\n", getpid());
   int chpid = fork();
 
   if(!chpid){
@@ -107,9 +107,8 @@ int main()
       int first;
       int last;
       int nbytes = read(fd[0], &first, sizeof(first));
-      //printf("Received string: %d\n", first);
       nbytes = read(fd[0], &last, sizeof(last));
-      //printf("Received string: %d\n", last);
+
       printf("\n");
       for(int i = 0; i < memsize; ++i)
         printf("%d ", sharedMem[i]);
@@ -132,18 +131,8 @@ int main()
     write(fd[1], &first, sizeof(int));
 
     write(fd[1], &memsize, sizeof(int));
-    /*sleep(1);
-    for(int i = 0; i < memsize; ++i)
-        printf("%d ", sharedMem[i]);
-      printf("\n");*/ 
-    struct sigaction act;
-    memset(&act, 0, sizeof(act));
-    act.sa_handler = hdl;
-    sigset_t   set; 
-    sigemptyset(&set);                                                             
-    sigaddset(&set, SIGTERM); 
-    act.sa_mask = set;
-    sigaction(SIGTERM, &act, 0);
+
+    
      
       //пробная передача
       /*pipe(fd);
@@ -171,11 +160,9 @@ int main()
     //pid_t pid = getpid();
     if(chpid){
     waitpid(chpid, NULL, 0); 
-    //wait(NULL);
-    //sleep(1);
-    printf("END - %d\n", getpid());
+
     printf("\n");
-    printf("\n");
+    sleep(2);
     for(int i = 0; i < memsize; ++i)
         printf("%d ", sharedMem[i]);
       printf("\n");
@@ -184,6 +171,6 @@ int main()
       exit(EXIT_FAILURE);
       }
     }
-    printf("%d\n", getpid());
+    
         return 0;
 } 
