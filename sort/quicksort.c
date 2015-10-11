@@ -20,7 +20,11 @@ void swap (int *x, int *y){
      *y = z;
 }
 
-
+int sigaction(int signum, const struct sigaction *act, struct sigaction *oldact);
+void hdl(int sig)
+{
+  printf("sigterm\n"); 
+}
 void qs(int* s_arr, int first, int last, int semID)
 {
 
@@ -52,17 +56,21 @@ void qs(int* s_arr, int first, int last, int semID)
 
     int fd[2];
     pipe(fd);
-    if(!fork()){
+    int chpid = fork();
+    if(!chpid){
       close(fd[0]);
       if (i < last){
         qs(s_arr, i, last,semID);
       }
+      
+      //wait(NULL);
     }else{
 
 
       if (first < j){
         qs(s_arr, first, j,semID);
       }
+      waitpid(chpid, NULL, 0);
     }
 }
 
@@ -91,32 +99,10 @@ int main()
     exit(EXIT_FAILURE);
   }
  
-  
-
-
+  printf("First - %d\n", getpid());
   int chpid = fork();
 
   if(!chpid){
-       
-    close(fd[0]);
-    int first = 0;
-    int n = 30;
-
-
-    for(int i = 0; i < memsize; ++i)
-      sharedMem[memsize-i-1] = rand() % 100;
-
-    shmdt(&shmid);      
-    write(fd[1], &first, sizeof(int));
-
-    write(fd[1], &memsize, sizeof(int));
-    /*sleep(1);
-    for(int i = 0; i < memsize; ++i)
-        printf("%d ", sharedMem[i]);
-      printf("\n");*/ 
-
-    }else{
-      
       close(fd[1]);
       int first;
       int last;
@@ -130,9 +116,35 @@ int main()
       printf("\n");
       shmdt(&shmid);
       shmctl(shmid,IPC_RMID,NULL); //IPC_STAT IPC_SET
-
-      //printf("%d\n", chpid);
+      
       qs(sharedMem,first,last-1,semID);
+    }else{
+             
+    close(fd[0]);
+    int first = 0;
+    //int n = 30;
+
+
+    for(int i = 0; i < memsize; ++i)
+      sharedMem[memsize-i-1] = rand() % 100;
+
+    shmdt(&shmid);      
+    write(fd[1], &first, sizeof(int));
+
+    write(fd[1], &memsize, sizeof(int));
+    /*sleep(1);
+    for(int i = 0; i < memsize; ++i)
+        printf("%d ", sharedMem[i]);
+      printf("\n");*/ 
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = hdl;
+    sigset_t   set; 
+    sigemptyset(&set);                                                             
+    sigaddset(&set, SIGTERM); 
+    act.sa_mask = set;
+    sigaction(SIGTERM, &act, 0);
+     
       //пробная передача
       /*pipe(fd);
 
@@ -157,9 +169,11 @@ int main()
 
     }
     //pid_t pid = getpid();
-    if(!chpid){
+    if(chpid){
     waitpid(chpid, NULL, 0); 
-    sleep(1);
+    //wait(NULL);
+    //sleep(1);
+    printf("END - %d\n", getpid());
     printf("\n");
     printf("\n");
     for(int i = 0; i < memsize; ++i)
@@ -170,6 +184,6 @@ int main()
       exit(EXIT_FAILURE);
       }
     }
-
+    printf("%d\n", getpid());
         return 0;
 } 
