@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 //#define SIZEOFMEM = 30;
+int semID;
 
 void exit (int code);
 
@@ -24,32 +25,36 @@ void swap (int *x, int *y){
 void hdl(int sig)
 {
   printf("\nEnd job\n"); 
+  if(semctl(semID, 0, IPC_RMID) < 0) {
+      perror("remove fail:");
+      exit(EXIT_FAILURE);
+  }
   exit(0);
 }
 void qs(int* s_arr, int first, int last, int semID)
 {
-      struct sembuf operations[1]; 
-      operations[0].sem_num = 0;   
-      operations[0].sem_op = -1;  
+  struct sembuf operations[1]; 
+  operations[0].sem_num = 0;   
+  operations[0].sem_op = -1;  
 
 
-      semop(semID, operations, sizeof(operations) / sizeof(struct sembuf)); 
+  semop(semID, operations, sizeof(operations) / sizeof(struct sembuf)); 
      
-      int i = first, j = last, x = s_arr[(first + last) / 2];
+  int i = first, j = last, x = s_arr[(first + last) / 2];
 
-      do {
-        while (s_arr[i] < x) i++;
-        while (s_arr[j] > x) j--;
+  do {
+    while (s_arr[i] < x) i++;
+    while (s_arr[j] > x) j--;
 
-        if(i <= j) {
-            if (s_arr[i] > s_arr[j]) swap(&s_arr[i], &s_arr[j]);
-            i++;
-            j--;
-        }
-      } while (i <= j);
+    if(i <= j) {
+      if (s_arr[i] > s_arr[j]) swap(&s_arr[i], &s_arr[j]);
+          i++;
+          j--;
+      }
+    } while (i <= j);
 
-      operations[0].sem_op = 1;
-      semop(semID, operations, sizeof(operations) / sizeof(struct sembuf)); 
+    operations[0].sem_op = 1;
+    semop(semID, operations, sizeof(operations) / sizeof(struct sembuf)); 
 
     
 
@@ -63,8 +68,6 @@ void qs(int* s_arr, int first, int last, int semID)
       }
       
     }else{
-
-
       if (first < j){
         qs(s_arr, first, j,semID);
       }
@@ -89,7 +92,8 @@ int main()
 
   int* sharedMem = shmat(shmid, NULL, 0); //SHM_RDONLY
 
-  int semID = semget(IPC_PRIVATE, 1, IPC_CREAT | IPC_EXCL | 0600);
+  semID = semget(IPC_PRIVATE, 1, IPC_CREAT | IPC_EXCL | 0600);
+
   if(semID < 0) {
     perror("semget fail:");
     exit(EXIT_FAILURE);
@@ -121,8 +125,6 @@ int main()
              
     close(fd[0]);
     int first = 0;
-    //int n = 30;
-
 
     for(int i = 0; i < memsize; ++i)
       sharedMem[memsize-i-1] = rand() % 100;
@@ -131,30 +133,6 @@ int main()
     write(fd[1], &first, sizeof(int));
 
     write(fd[1], &memsize, sizeof(int));
-
-    
-     
-      //пробная передача
-      /*pipe(fd);
-
-      if(!fork()){
-      close(fd[0]);
-      
-      int cfirst = 67;
-      int clast = 66;
-
-      write(fd[1], &cfirst, sizeof(int));
-
-      write(fd[1], &clast, sizeof(int));
-
-      }else{
-        int n1,n2;
-        int cnbytes = read(fd[0], &n1, sizeof(n1));
-        printf("Received string: %d\n", n1);
-        cnbytes = read(fd[0], &n2, sizeof(n2));
-        printf("Received string: %d\n", n2);
-      }*/
-
 
     }
     //pid_t pid = getpid();
@@ -172,5 +150,5 @@ int main()
       }
     }
     
-        return 0;
+    return 0;
 } 
