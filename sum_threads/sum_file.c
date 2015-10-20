@@ -89,10 +89,11 @@ struct ParamsWorkers{
 void* work(void *p);
 void* readAndSend(void *p);
 void* sumAndWrite(void *p);
-
+int isDone;
 
 
 int main(){
+  isDone = 0;
 	pthread_t working[WORKING_THREADS_COUNT];	
 	pthread_t  reader, writer;
 
@@ -146,20 +147,14 @@ int main(){
 void* work(void* p){
 	
 struct ParamsWorkers* params = (struct ParamsWorkers*) p;
-/*pthread_mutex_lock(&params->paramsReader->mutex);
-pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
-pthread_mutex_unlock(&params->paramsReader->mutex);*/
 int sum[50];
 int count = -1;
 while(1){
   pthread_mutex_lock(&params->paramsReader->mutex);
-  //printf("Ок жду\n");
   pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
-  //printf("Дождался\n");
   if(isEmptyQueueArray(&params->paramsReader->queue) == 0){
     count++;
     void* typeQR;
-    //printf("привет \n");
 		//pthread_mutex_lock(&params->paramsReader->mutex);
 
     //pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
@@ -179,16 +174,16 @@ while(1){
 		}
     printf("сумма %d\n",sum[count]);
     
+
 		pthread_mutex_lock(&params->paramsWriter->mutex);
 
 		putQueueArray(&params->paramsWriter->queue, &sum[count]);
 
-    //if(countQueueArray(&params->paramsWriter->queue) >2){
-      pthread_cond_signal(&params->paramsWriter->condvar); 
-      
-    //}
+    pthread_cond_signal(&params->paramsWriter->condvar); 
+    
     pthread_mutex_unlock(&params->paramsWriter->mutex);
-
+    if(isDone)
+      pthread_cond_signal(&params->paramsWriter->condvar);
 
 		
 
@@ -212,7 +207,7 @@ void* sumAndWrite(void* p){
     pthread_cond_wait(&params->condvar,&params->mutex);
 
     //printf("%d\n", isEmptyQueueArray(&params->queue));
-    while(isEmptyQueueArray(&params->queue) == 0){
+    while(!isEmptyQueueArray(&params->queue)){
     getQueueArray(&params->queue, &b);
     int* k = (int *) b;
     sum += *k;
@@ -220,6 +215,7 @@ void* sumAndWrite(void* p){
 
     }	
     printf("SUUUUMM = %d \n",sum);
+
   }
 
 	FILE *mf;
@@ -247,8 +243,6 @@ void* readAndSend(void* p){
     estr = fgets(str[count],50,mf);
     if (estr != NULL){       
       putQueueArray(&params->queue, estr);
-      //printf("Закинул %d\n", isEmptyQueueArray(&params->queue));
-    	//pthread_cond_signal(&params->structArr[count].condvar);
 
     }
     else{
@@ -257,8 +251,8 @@ void* readAndSend(void* p){
       	break;
       }
     
-    //if((count+1) % 5 == 0){v
-      pthread_cond_signal(&params->condvar);
+      for(int i=0;i<WORKING_THREADS_COUNT;i++)
+        pthread_cond_signal(&params->condvar);
       pthread_mutex_unlock(&params->mutex);
       //for(int i=0;i<WORKING_THREADS_COUNT;i++){
       
@@ -268,21 +262,22 @@ void* readAndSend(void* p){
       if(count>4){
         pthread_mutex_lock(&params->mutexRet);
 
+        
         pthread_cond_wait(&params->condvarRet,&params->mutexRet);
         pthread_mutex_unlock(&params->mutexRet);
       }
       pthread_mutex_lock(&params->mutex);
-      //printf("Дальше\n");
-    //}
+
 
   }
-
-  /*while (isEmptyQueueArray(&params->queue) == 0){
-    queueArrayBaseType typeQR;
-    getQueueArray(&params->queue, &typeQR);
-  
-    char* str = (char *) typeQR;
-    printf("%s\n", str);
-  }  */
+  pthread_mutex_unlock(&params->mutex);
+ 
+  while(1){
+    if (!isEmptyQueueArray(&params->queue)){
+      pthread_cond_signal(&params->condvar);
+    }
+    else
+      break;
+  }
 
 }
