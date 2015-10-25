@@ -75,10 +75,10 @@ int countQueueArray(QueueArray *F){
 struct ParamsWrRead{
   pthread_mutex_t mutex;
   pthread_cond_t condvar;
-  pthread_mutex_t mutexRet;
-  pthread_cond_t condvarRet;
 	QueueArray queue;
   int count;
+  int isDone;
+
 };
 struct ParamsWorkers{
   struct ParamsWrRead* paramsWriter;
@@ -110,13 +110,13 @@ int main(){
   struct ParamsWrRead paramsReader;
   pthread_mutex_init(&paramsReader.mutex, NULL);
   pthread_cond_init(&paramsReader.condvar, NULL); 
-  pthread_mutex_init(&paramsReader.mutexRet, NULL);
-  pthread_cond_init(&paramsReader.condvarRet, NULL);
+  paramsReader.isDone = 0;
   paramsReader.queue = queueReader;
 
 	struct ParamsWrRead paramsWriter;
   pthread_mutex_init(&paramsWriter.mutex, NULL);
   pthread_cond_init(&paramsWriter.condvar, NULL); 
+  paramsWriter.isDone = 0;
   paramsWriter.queue = queueWriter;
 
   struct ParamsWorkers params;  
@@ -149,11 +149,17 @@ void* work(void* p){
 struct ParamsWorkers* params = (struct ParamsWorkers*) p;
 int sum[50];
 int count = -1;
+pthread_mutex_lock(&params->paramsReader->mutex);
+pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
+pthread_mutex_unlock(&params->paramsReader->mutex);
 while(1){
+  
   pthread_mutex_lock(&params->paramsReader->mutex);
-  pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
-  if(isEmptyQueueArray(&params->paramsReader->queue) == 0){
+  //printf("залочил\n");
+  
+  if(!isEmptyQueueArray(&params->paramsReader->queue)){
     count++;
+    
     void* typeQR;
 		//pthread_mutex_lock(&params->paramsReader->mutex);
 
@@ -162,7 +168,7 @@ while(1){
     getQueueArray(&params->paramsReader->queue, &typeQR);
 
     char* str = (char *) typeQR;
-    //printf("я работаю %s\n",str);
+    
     
 		sum[count] = 0;
 		for(int i = 0; i<50; i++){
@@ -175,26 +181,35 @@ while(1){
     printf("сумма %d\n",sum[count]);
     
 
-		pthread_mutex_lock(&params->paramsWriter->mutex);
+    pthread_mutex_lock(&params->paramsWriter->mutex);
 
-		putQueueArray(&params->paramsWriter->queue, &sum[count]);
+    putQueueArray(&params->paramsWriter->queue, &sum[count]);
 
     pthread_cond_signal(&params->paramsWriter->condvar); 
     
     pthread_mutex_unlock(&params->paramsWriter->mutex);
-    if(isDone)
-      pthread_cond_signal(&params->paramsWriter->condvar);
+
 
 		
 
 		}
+    //printf("разлочил\n");
+    if (params->paramsReader->isDone && isEmptyQueueArray(&params->paramsReader->queue)){
+      pthread_mutex_unlock(&params->paramsReader->mutex);
+      break;
+    }
     pthread_mutex_unlock(&params->paramsReader->mutex);
-    pthread_mutex_lock(&params->paramsReader->mutexRet);
-    pthread_cond_signal(&params->paramsReader->condvarRet);
-    pthread_mutex_unlock(&params->paramsReader->mutexRet);
+
 
   }
-		
+  pthread_mutex_lock(&params->paramsWriter->mutex);
+
+  params->paramsWriter->isDone++;
+
+  pthread_mutex_unlock(&params->paramsWriter->mutex);
+
+  printf("завершен worker\n");
+
 }
 
 void* sumAndWrite(void* p){
@@ -202,26 +217,28 @@ void* sumAndWrite(void* p){
 	void* b;
 	int sum = 0;
 	struct ParamsWrRead* params = (struct ParamsWrRead*) p;
-  while(1){
+  pthread_mutex_lock(&params->mutex);
+  pthread_cond_wait(&params->condvar,&params->mutex);
+  pthread_mutex_unlock(&params->mutex);
+  while(params->isDone != 5){
     pthread_mutex_lock(&params->mutex);
-    pthread_cond_wait(&params->condvar,&params->mutex);
-
-    //printf("%d\n", isEmptyQueueArray(&params->queue));
+    
     while(!isEmptyQueueArray(&params->queue)){
     getQueueArray(&params->queue, &b);
     int* k = (int *) b;
     sum += *k;
-    pthread_mutex_unlock(&params->mutex);
+
 
     }	
-    printf("SUUUUMM = %d \n",sum);
-
+    pthread_mutex_unlock(&params->mutex);
+    //printf("SUUUUMM = %d \n",sum)
   }
 
 	FILE *mf;
 	mf = fopen("output","w");
 	fprintf(mf,"%d",sum);
 	fclose(mf);
+  printf("завершен write\n");
 	printf("SUUUUMM = %d \n",sum);
 }
 
@@ -231,14 +248,14 @@ void* readAndSend(void* p){
   FILE *mf;
   char *estr;
   char str[50][50];
-  //char* str;
+
   mf = fopen("input","r");
   
   int count = -1;
-  pthread_mutex_lock(&params->mutex);
+  
   while (1)
   {
-    
+    pthread_mutex_lock(&params->mutex);
     count++;
     estr = fgets(str[count],50,mf);
     if (estr != NULL){       
@@ -247,37 +264,28 @@ void* readAndSend(void* p){
     }
     else{
       	//pthread_cond_signal(&params->structArr[0].paramsWriter->condvar);
+        params->isDone = 1;
         params->count = count;
+        pthread_mutex_unlock(&params->mutex);
       	break;
       }
     
       for(int i=0;i<WORKING_THREADS_COUNT;i++)
         pthread_cond_signal(&params->condvar);
-      pthread_mutex_unlock(&params->mutex);
-      //for(int i=0;i<WORKING_THREADS_COUNT;i++){
-      
-            
-      //}
-      //printf("Послал\n");
-      if(count>4){
-        pthread_mutex_lock(&params->mutexRet);
+      //pthread_mutex_unlock(&params->mutex);
 
-        
-        pthread_cond_wait(&params->condvarRet,&params->mutexRet);
-        pthread_mutex_unlock(&params->mutexRet);
-      }
-      pthread_mutex_lock(&params->mutex);
+      pthread_mutex_unlock(&params->mutex);
 
 
   }
-  pthread_mutex_unlock(&params->mutex);
- 
-  while(1){
+  
+  
+  /*while(1){
     if (!isEmptyQueueArray(&params->queue)){
       pthread_cond_signal(&params->condvar);
     }
     else
       break;
-  }
-
+  }*/
+  printf("завершен read\n");
 }
