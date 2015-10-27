@@ -10,6 +10,7 @@
 
 
 #define WORKING_THREADS_COUNT 5
+#define SIZESTR 256
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 /*Переменная ошибок*/
@@ -89,11 +90,9 @@ struct ParamsWorkers{
 void* work(void *p);
 void* readAndSend(void *p);
 void* sumAndWrite(void *p);
-int isDone;
 
 
 int main(){
-  isDone = 0;
 	pthread_t working[WORKING_THREADS_COUNT];	
 	pthread_t  reader, writer;
 
@@ -147,9 +146,11 @@ int main(){
 void* work(void* p){
 	
 struct ParamsWorkers* params = (struct ParamsWorkers*) p;
-int sum[50];
+
+int* summ;
 int count = -1;
 pthread_mutex_lock(&params->paramsReader->mutex);
+params->paramsReader->isDone++;
 pthread_cond_wait(&params->paramsReader->condvar,&params->paramsReader->mutex);
 pthread_mutex_unlock(&params->paramsReader->mutex);
 while(1){
@@ -170,20 +171,21 @@ while(1){
     char* str = (char *) typeQR;
     
     
-		sum[count] = 0;
-		for(int i = 0; i<50; i++){
+		summ = (int*)malloc(sizeof(int));
+		for(int i = 0; i<SIZESTR; i++){
 			if( isdigit(str[i]) != 0){
-				sum[count]+=atoi(&str[i]);
+        
+				*summ+=atoi(&str[i]);
 				//printf("%c ",params->str[i]);
 			}
 			//printf("%s ",&params->str[i]);
 		}
-    printf("сумма %d\n",sum[count]);
+    printf("сумма %d\n",*summ);
     
 
     pthread_mutex_lock(&params->paramsWriter->mutex);
 
-    putQueueArray(&params->paramsWriter->queue, &sum[count]);
+    putQueueArray(&params->paramsWriter->queue, summ);
 
     pthread_cond_signal(&params->paramsWriter->condvar); 
     
@@ -243,21 +245,25 @@ void* sumAndWrite(void* p){
 }
 
 void* readAndSend(void* p){
-  sleep(1);
+  //sleep(1);
 	struct ParamsWrRead* params = (struct ParamsWrRead*) p;
   FILE *mf;
   char *estr;
-  char str[50][50];
-
+  char* strr;
   mf = fopen("input","r");
   
   int count = -1;
   
+  while(params->isDone != 5){
+
+  }
+  params->isDone = 0;
   while (1)
   {
     pthread_mutex_lock(&params->mutex);
     count++;
-    estr = fgets(str[count],50,mf);
+    strr=(char*)malloc(SIZESTR);
+    estr = fgets(strr,50,mf);//str[count]
     if (estr != NULL){       
       putQueueArray(&params->queue, estr);
 
@@ -280,12 +286,6 @@ void* readAndSend(void* p){
   }
   
   
-  /*while(1){
-    if (!isEmptyQueueArray(&params->queue)){
-      pthread_cond_signal(&params->condvar);
-    }
-    else
-      break;
-  }*/
+  free(strr);
   printf("завершен read\n");
 }
